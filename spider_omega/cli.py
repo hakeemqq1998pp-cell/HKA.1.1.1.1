@@ -9,6 +9,7 @@ from .reports import write_report
 from .web_audit import audit_page
 from .vulnerability_hunter import run_assessment
 from .injection_lab import audit_source_tree, export_local_sqlite
+from .injection_training_lab import run_sql_injection_lab
 
 def main():
     parser = argparse.ArgumentParser(
@@ -49,6 +50,7 @@ def main():
     p_export = sub.add_parser("db-export", help="Export tables from a local SQLite database")
     p_export.add_argument("database")
     p_export.add_argument("--output", default="omega_exports")
+    p_injlab = sub.add_parser("injection-lab", help="Run a safe SQL injection demonstration in in-memory SQLite")
     p_search = sub.add_parser("nest-search", help="Search saved website nests")
     p_search.add_argument("query")
     p_search.add_argument("--limit", type=int, default=20)
@@ -138,6 +140,13 @@ def main():
         for table in result["tables_exported"]:
             print("{}: {} rows -> {}".format(table["table"], table["rows"], table["json"]))
         print("Tables exported:", len(result["tables_exported"]))
+    elif args.command == "injection-lab":
+        result = run_sql_injection_lab()
+        print("Lab:", result["lab"])
+        print("Test input:", result["test_input"])
+        print("Vulnerable query returned:", result["vulnerable_query_count"], "rows")
+        print("Parameterized query returned:", result["parameterized_query_count"], "rows")
+        print("Lesson:", result["lesson"])
     elif args.command == "nest-search":
         rows = search_nests(args.query, args.limit)
         for title, url, excerpt, saved, keywords in rows:
