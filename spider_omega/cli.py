@@ -4,6 +4,8 @@ from .phishing_lab import analyze_email, create_awareness_demo
 from .memory import save_result, history
 from .authorized_lab import scan_private_host
 from .web_nest import crawl_site, search_nests
+from .recon import inspect_public_site
+from .reports import write_report
 
 def main():
     parser = argparse.ArgumentParser(
@@ -29,6 +31,9 @@ def main():
     p_crawl.add_argument("--keywords", default="")
     p_crawl.add_argument("--delay", type=float, default=2.0)
     p_crawl.add_argument("--i-have-permission", action="store_true")
+    p_recon = sub.add_parser("recon", help="Passive DNS, HTTP header and TLS inspection")
+    p_recon.add_argument("host")
+    p_recon.add_argument("--report", default="recon")
     p_search = sub.add_parser("nest-search", help="Search saved website nests")
     p_search.add_argument("query")
     p_search.add_argument("--limit", type=int, default=20)
@@ -74,6 +79,12 @@ def main():
         print("Pages stored:", result["stored"])
         for note in result["notes"]: print("Note:", note)
         save_result("web-nest", result["seed"], "INFO", "Stored {} pages".format(result["stored"]))
+    elif args.command == "recon":
+        result = inspect_public_site(args.host)
+        for key, value in result.items(): print("{}: {}".format(key, value))
+        paths = write_report(result, args.report)
+        print("Reports:", paths[0], paths[1])
+        save_result("passive-recon", args.host, "INFO", "Report: " + paths[0])
     elif args.command == "nest-search":
         rows = search_nests(args.query, args.limit)
         for title, url, excerpt, saved, keywords in rows:
