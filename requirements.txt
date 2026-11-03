@@ -1,0 +1,1 @@
+# THE SPIDER OMEGA uses Python standard library only.
