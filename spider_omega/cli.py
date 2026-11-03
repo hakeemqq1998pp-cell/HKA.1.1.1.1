@@ -6,6 +6,7 @@ from .authorized_lab import scan_private_host
 from .web_nest import crawl_site, search_nests
 from .recon import inspect_public_site
 from .reports import write_report
+from .web_audit import audit_page
 
 def main():
     parser = argparse.ArgumentParser(
@@ -34,6 +35,9 @@ def main():
     p_recon = sub.add_parser("recon", help="Passive DNS, HTTP header and TLS inspection")
     p_recon.add_argument("host")
     p_recon.add_argument("--report", default="recon")
+    p_audit = sub.add_parser("web-audit", help="Run non-invasive checks on one website page")
+    p_audit.add_argument("url")
+    p_audit.add_argument("--report", default="web_audit")
     p_search = sub.add_parser("nest-search", help="Search saved website nests")
     p_search.add_argument("query")
     p_search.add_argument("--limit", type=int, default=20)
@@ -85,6 +89,17 @@ def main():
         paths = write_report(result, args.report)
         print("Reports:", paths[0], paths[1])
         save_result("passive-recon", args.host, "INFO", "Report: " + paths[0])
+    elif args.command == "web-audit":
+        try:
+            result = audit_page(args.url)
+        except (ValueError, OSError) as exc:
+            parser.error(str(exc))
+        print("Risk:", result.get("risk", "INFO"))
+        for finding in result.get("findings", []):
+            print("[{}] {}: {}".format(finding["severity"].upper(), finding["code"], finding["detail"]))
+        paths = write_report(result, args.report)
+        print("Reports:", paths[0], paths[1])
+        save_result("web-audit", args.url, result.get("risk", "INFO"), "Report: " + paths[0])
     elif args.command == "nest-search":
         rows = search_nests(args.query, args.limit)
         for title, url, excerpt, saved, keywords in rows:
