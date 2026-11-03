@@ -3,6 +3,7 @@ from .scanner import analyze_url
 from .phishing_lab import analyze_email, create_awareness_demo
 from .memory import save_result, history
 from .authorized_lab import scan_private_host
+from .web_nest import crawl_site, search_nests
 
 def main():
     parser = argparse.ArgumentParser(
@@ -21,6 +22,16 @@ def main():
     p_lab.add_argument('host')
     p_lab.add_argument('--ports', default='22,80,443,8080')
     p_lab.add_argument('--i-own-this-lab', action='store_true')
+    p_crawl = sub.add_parser("crawl-site", help="Explore public pages and build a local website nest")
+    p_crawl.add_argument("url")
+    p_crawl.add_argument("--pages", type=int, default=20)
+    p_crawl.add_argument("--depth", type=int, default=2)
+    p_crawl.add_argument("--keywords", default="")
+    p_crawl.add_argument("--delay", type=float, default=2.0)
+    p_crawl.add_argument("--i-have-permission", action="store_true")
+    p_search = sub.add_parser("nest-search", help="Search saved website nests")
+    p_search.add_argument("query")
+    p_search.add_argument("--limit", type=int, default=20)
     args = parser.parse_args()
 
     if args.command == "scan-url":
@@ -50,6 +61,24 @@ def main():
             print("TCP/{}: {}".format(item["port"], item["status"]))
         opened = [str(x["port"]) for x in results if x["status"] == "open"]
         save_result("lab-tcp", args.host, "INFO", "Open ports: " + ", ".join(opened))
+    elif args.command == "crawl-site":
+        if not args.i_have_permission:
+            parser.error("Confirm permission to crawl this website with --i-have-permission.")
+        if not 1 <= args.pages <= 100 or not 0 <= args.depth <= 5:
+            parser.error("--pages must be 1..100 and --depth 0..5.")
+        try:
+            result = crawl_site(args.url, args.pages, args.depth, args.keywords.split(","), args.delay)
+        except ValueError as exc:
+            parser.error(str(exc))
+        print("Nest:", result["database"])
+        print("Pages stored:", result["stored"])
+        for note in result["notes"]: print("Note:", note)
+        save_result("web-nest", result["seed"], "INFO", "Stored {} pages".format(result["stored"]))
+    elif args.command == "nest-search":
+        rows = search_nests(args.query, args.limit)
+        for title, url, excerpt, saved, keywords in rows:
+            print("\\n{}\\n{}\\n{}\\nKeywords: {}".format(title or "(untitled)", url, excerpt, keywords))
+        print("Results:", len(rows))
     elif args.command == "history":
         for row in history(max(1, args.limit)): print(" | ".join(map(str, row)))
     return 0
