@@ -51,6 +51,10 @@ def main():
     p_export.add_argument("database")
     p_export.add_argument("--output", default="omega_exports")
     p_injlab = sub.add_parser("injection-lab", help="Run a safe SQL injection demonstration in in-memory SQLite")
+    sub.add_parser("ai-status", help="Show OMEGA AI CORE local engine status")
+    p_ai = sub.add_parser("ai-ask", help="Ask the independent local OMEGA AI model")
+    p_ai.add_argument("prompt")
+    p_ai.add_argument("--model", default=None)
     p_search = sub.add_parser("nest-search", help="Search saved website nests")
     p_search.add_argument("query")
     p_search.add_argument("--limit", type=int, default=20)
@@ -140,6 +144,15 @@ def main():
         for table in result["tables_exported"]:
             print("{}: {} rows -> {}".format(table["table"], table["rows"], table["json"]))
         print("Tables exported:", len(result["tables_exported"]))
+    elif args.command in {"ai-status", "ai-ask"}:
+        from omega_ai.core import ask as omega_ask, status as omega_status, OmegaAIError
+        if args.command == "ai-status":
+            for key, value in omega_status().items(): print("{}: {}".format(key, value))
+        else:
+            try:
+                print(omega_ask(args.prompt, model=args.model))
+            except (OmegaAIError, ValueError) as exc:
+                parser.error(str(exc))
     elif args.command == "injection-lab":
         result = run_sql_injection_lab()
         print("Lab:", result["lab"])
