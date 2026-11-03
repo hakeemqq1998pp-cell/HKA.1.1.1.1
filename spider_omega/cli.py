@@ -7,6 +7,7 @@ from .web_nest import crawl_site, search_nests
 from .recon import inspect_public_site
 from .reports import write_report
 from .web_audit import audit_page
+from .vulnerability_hunter import run_assessment
 
 def main():
     parser = argparse.ArgumentParser(
@@ -38,6 +39,9 @@ def main():
     p_audit = sub.add_parser("web-audit", help="Run non-invasive checks on one website page")
     p_audit.add_argument("url")
     p_audit.add_argument("--report", default="web_audit")
+    p_vuln = sub.add_parser("vuln-scan", help="Run defensive configuration and exposure checks")
+    p_vuln.add_argument("url")
+    p_vuln.add_argument("--report", default="vulnerability")
     p_search = sub.add_parser("nest-search", help="Search saved website nests")
     p_search.add_argument("query")
     p_search.add_argument("--limit", type=int, default=20)
@@ -100,6 +104,17 @@ def main():
         paths = write_report(result, args.report)
         print("Reports:", paths[0], paths[1])
         save_result("web-audit", args.url, result.get("risk", "INFO"), "Report: " + paths[0])
+    elif args.command == "vuln-scan":
+        try:
+            result = run_assessment(args.url)
+        except ValueError as exc:
+            parser.error(str(exc))
+        print("Risk:", result["risk"])
+        for finding in result["findings"]:
+            print("[{}] {}: {}".format(finding["severity"].upper(), finding["id"], finding["detail"]))
+        paths = write_report(result, args.report)
+        print("Reports:", paths[0], paths[1])
+        save_result("vulnerability-assessment", args.url, result["risk"], "Report: " + paths[0])
     elif args.command == "nest-search":
         rows = search_nests(args.query, args.limit)
         for title, url, excerpt, saved, keywords in rows:
