@@ -2,6 +2,7 @@ import argparse
 from .scanner import analyze_url
 from .phishing_lab import analyze_email, create_awareness_demo
 from .memory import save_result, history
+from .authorized_lab import scan_private_host
 
 def main():
     parser = argparse.ArgumentParser(
@@ -16,6 +17,10 @@ def main():
     p_demo.add_argument("--output", default="phishing_awareness_demo.html")
     p_hist = sub.add_parser("history", help="Show recent local scan history")
     p_hist.add_argument("--limit", type=int, default=20)
+    p_lab = sub.add_parser('lab-scan', help='Limited TCP checks for private lab IPs only')
+    p_lab.add_argument('host')
+    p_lab.add_argument('--ports', default='22,80,443,8080')
+    p_lab.add_argument('--i-own-this-lab', action='store_true')
     args = parser.parse_args()
 
     if args.command == "scan-url":
@@ -34,6 +39,17 @@ def main():
             print(f'URL: {item["url"]} => {item["risk"]} ({item["score"]}/100)')
     elif args.command == "simulate":
         print("Created:", create_awareness_demo(args.output))
+    elif args.command == "lab-scan":
+        if not args.i_own_this_lab:
+            parser.error("Confirm authorization with --i-own-this-lab.")
+        try:
+            results = scan_private_host(args.host, [int(x) for x in args.ports.split(",")])
+        except ValueError as exc:
+            parser.error(str(exc))
+        for item in results:
+            print("TCP/{}: {}".format(item["port"], item["status"]))
+        opened = [str(x["port"]) for x in results if x["status"] == "open"]
+        save_result("lab-tcp", args.host, "INFO", "Open ports: " + ", ".join(opened))
     elif args.command == "history":
         for row in history(max(1, args.limit)): print(" | ".join(map(str, row)))
     return 0
