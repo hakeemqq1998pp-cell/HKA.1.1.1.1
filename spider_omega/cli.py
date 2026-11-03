@@ -8,6 +8,7 @@ from .recon import inspect_public_site
 from .reports import write_report
 from .web_audit import audit_page
 from .vulnerability_hunter import run_assessment
+from .injection_lab import audit_source_tree, export_local_sqlite
 
 def main():
     parser = argparse.ArgumentParser(
@@ -42,6 +43,12 @@ def main():
     p_vuln = sub.add_parser("vuln-scan", help="Run defensive configuration and exposure checks")
     p_vuln.add_argument("url")
     p_vuln.add_argument("--report", default="vulnerability")
+    p_sqli = sub.add_parser("sql-audit", help="Audit local Python source for risky SQL construction")
+    p_sqli.add_argument("--path", default=".")
+    p_sqli.add_argument("--report", default="sql_audit")
+    p_export = sub.add_parser("db-export", help="Export tables from a local SQLite database")
+    p_export.add_argument("database")
+    p_export.add_argument("--output", default="omega_exports")
     p_search = sub.add_parser("nest-search", help="Search saved website nests")
     p_search.add_argument("query")
     p_search.add_argument("--limit", type=int, default=20)
@@ -115,6 +122,22 @@ def main():
         paths = write_report(result, args.report)
         print("Reports:", paths[0], paths[1])
         save_result("vulnerability-assessment", args.url, result["risk"], "Report: " + paths[0])
+    elif args.command == "sql-audit":
+        result = audit_source_tree(args.path)
+        print("Files scanned:", result["files_scanned"])
+        for finding in result["findings"]:
+            print("[{}] {}:{} {}".format(finding["severity"].upper(), finding.get("file", ""), finding.get("line", 0), finding["rule"]))
+        paths = write_report(result, args.report)
+        print("Reports:", paths[0], paths[1])
+        save_result("sql-source-audit", args.path, "INFO", "Findings: {}".format(len(result["findings"])))
+    elif args.command == "db-export":
+        try:
+            result = export_local_sqlite(args.database, args.output)
+        except (ValueError, OSError) as exc:
+            parser.error(str(exc))
+        for table in result["tables_exported"]:
+            print("{}: {} rows -> {}".format(table["table"], table["rows"], table["json"]))
+        print("Tables exported:", len(result["tables_exported"]))
     elif args.command == "nest-search":
         rows = search_nests(args.query, args.limit)
         for title, url, excerpt, saved, keywords in rows:
