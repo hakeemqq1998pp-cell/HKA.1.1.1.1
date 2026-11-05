@@ -85,8 +85,8 @@ def ask(prompt: str, model: str | None = None, endpoint: str | None = None) -> s
             data = json.loads(response.read().decode("utf-8"))
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
         raise OmegaAIError(
-            "Cannot reach the local model. Install/start Ollama and pull the model, "
-            "or set OMEGA_AI_ENDPOINT and OMEGA_AI_MODEL."
+            "Cannot reach the local model server. Start Ollama or llama-server, "
+            "then check OMEGA_AI_ENDPOINT and OMEGA_AI_MODEL."
         ) from exc
 
     if openai_compatible:
@@ -106,7 +106,7 @@ def ask(prompt: str, model: str | None = None, endpoint: str | None = None) -> s
 def status() -> dict:
     return {
         "engine": "OMEGA AI CORE",
-        "provider": "local Ollama-compatible endpoint",
+        "provider": "local HTTP endpoint (Ollama or llama.cpp)",
         "endpoint": os.getenv("OMEGA_AI_ENDPOINT", DEFAULT_ENDPOINT),
         "model": os.getenv("OMEGA_AI_MODEL", DEFAULT_MODEL),
         "memory": str(DB_PATH),
