@@ -70,9 +70,10 @@ def ask(prompt: str, model: str | None = None, endpoint: str | None = None) -> s
         *recent_messages(),
         {"role": "user", "content": prompt},
     ]
-    payload = json.dumps(
-        {"model": model, "messages": messages, "stream": False}
-    ).encode("utf-8")
+    # llama.cpp server exposes the OpenAI-compatible route; Ollama uses /api/chat.
+    openai_compatible = endpoint.rstrip("/").endswith("/v1/chat/completions")
+    payload_data = {"model": model, "messages": messages, "stream": False}
+    payload = json.dumps(payload_data).encode("utf-8")
     request = urllib.request.Request(
         endpoint,
         data=payload,
@@ -88,7 +89,13 @@ def ask(prompt: str, model: str | None = None, endpoint: str | None = None) -> s
             "or set OMEGA_AI_ENDPOINT and OMEGA_AI_MODEL."
         ) from exc
 
-    answer = data.get("message", {}).get("content", "").strip()
+    if openai_compatible:
+        choices = data.get("choices") or []
+        message = choices[0].get("message", {}) if choices else {}
+        answer = message.get("content", "")
+    else:
+        answer = data.get("message", {}).get("content", "")
+    answer = answer.strip() if isinstance(answer, str) else ""
     if not answer:
         raise OmegaAIError("The local model returned an empty response.")
     remember("user", prompt)
