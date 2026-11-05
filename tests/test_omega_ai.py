@@ -1,3 +1,5 @@
+import io
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -21,6 +23,30 @@ class OmegaCoreTests(unittest.TestCase):
                         {"role": "assistant", "content": "hi"},
                     ],
                 )
+
+
+    def test_ask_supports_ollama_response(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(core, "DB_PATH", Path(tmp) / "memory.sqlite3"):
+                response = io.BytesIO(json.dumps({
+                    "message": {"content": "Hello from Ollama"}
+                }).encode("utf-8"))
+                with patch.object(core.urllib.request, "urlopen", return_value=response):
+                    answer = core.ask("hello")
+                self.assertEqual(answer, "Hello from Ollama")
+
+    def test_ask_supports_llama_cpp_openai_response(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(core, "DB_PATH", Path(tmp) / "memory.sqlite3"):
+                response = io.BytesIO(json.dumps({
+                    "choices": [{"message": {"content": "Hello from llama.cpp"}}]
+                }).encode("utf-8"))
+                with patch.object(core.urllib.request, "urlopen", return_value=response):
+                    answer = core.ask(
+                        "hello",
+                        endpoint="http://127.0.0.1:8080/v1/chat/completions",
+                    )
+                self.assertEqual(answer, "Hello from llama.cpp")
 
     def test_rejects_empty_prompt(self):
         with self.assertRaises(ValueError):
