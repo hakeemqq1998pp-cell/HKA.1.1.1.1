@@ -15,7 +15,7 @@ def write_report(data, name="omega_report"):
     markdown = (
         "# THE SPIDER OMEGA Report\n\n"
         "Generated: " + datetime.now(timezone.utc).isoformat()
-        + "\n\n\`\`\`json\n" + rendered + "\n\`\`\`\n"
+        + "\n\n```json\n" + rendered + "\n```\n"
     )
     md_path.write_text(markdown, encoding="utf-8")
     return str(json_path), str(md_path)
