@@ -1,7 +1,7 @@
 """Provider-independent local AI engine.
 
-The engine talks to a locally running Ollama-compatible HTTP endpoint.
-It stores conversation history locally and does not require ChatGPT.
+The engine talks to a local Ollama or llama.cpp HTTP endpoint and stores
+conversation history in a local SQLite database.
 """
 from __future__ import annotations
 
@@ -12,8 +12,10 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-DEFAULT_ENDPOINT = "http://127.0.0.1:11434/api/chat"
-DEFAULT_MODEL = "qwen2.5:1.5b"
+# This project currently uses llama.cpp by default. Override either value
+# with OMEGA_AI_ENDPOINT / OMEGA_AI_MODEL when using another local provider.
+DEFAULT_ENDPOINT = "http://127.0.0.1:8080/v1/chat/completions"
+DEFAULT_MODEL = "qwen-local"
 DB_PATH = Path.home() / ".omega_ai" / "memory.sqlite3"
 
 
@@ -70,10 +72,10 @@ def ask(prompt: str, model: str | None = None, endpoint: str | None = None) -> s
         *recent_messages(),
         {"role": "user", "content": prompt},
     ]
-    # llama.cpp server exposes the OpenAI-compatible route; Ollama uses /api/chat.
     openai_compatible = endpoint.rstrip("/").endswith("/v1/chat/completions")
-    payload_data = {"model": model, "messages": messages, "stream": False}
-    payload = json.dumps(payload_data).encode("utf-8")
+    payload = json.dumps(
+        {"model": model, "messages": messages, "stream": False}
+    ).encode("utf-8")
     request = urllib.request.Request(
         endpoint,
         data=payload,
@@ -82,11 +84,32 @@ def ask(prompt: str, model: str | None = None, endpoint: str | None = None) -> s
     )
     try:
         with urllib.request.urlopen(request, timeout=180) as response:
-            data = json.loads(response.read().decode("utf-8"))
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+            raw = response.read().decode("utf-8")
+    except urllib.error.HTTPError as exc:
+        # HTTPError is also a URLError, so catch it first and preserve the
+        # server's status/body instead of reporting a misleading connection error.
+        try:
+            detail = exc.read().decode("utf-8", errors="replace")[:1000]
+        except Exception:
+            detail = ""
         raise OmegaAIError(
-            "Cannot reach the local model server. Start Ollama or llama-server, "
-            "then check OMEGA_AI_ENDPOINT and OMEGA_AI_MODEL."
+            f"Local model server returned HTTP {exc.code}: {detail or exc.reason}"
+        ) from exc
+    except urllib.error.URLError as exc:
+        raise OmegaAIError(
+            f"Cannot connect to {endpoint}: {exc.reason}. "
+            "Check that llama-server is running and the endpoint is correct."
+        ) from exc
+    except TimeoutError as exc:
+        raise OmegaAIError(
+            "The local model request timed out. Try a shorter prompt or reduce context."
+        ) from exc
+
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise OmegaAIError(
+            f"The local model returned invalid JSON: {raw[:500]}"
         ) from exc
 
     if openai_compatible:
@@ -97,7 +120,10 @@ def ask(prompt: str, model: str | None = None, endpoint: str | None = None) -> s
         answer = data.get("message", {}).get("content", "")
     answer = answer.strip() if isinstance(answer, str) else ""
     if not answer:
-        raise OmegaAIError("The local model returned an empty response.")
+        raise OmegaAIError(
+            "The local model returned an empty response. "
+            f"Response preview: {json.dumps(data, ensure_ascii=False)[:500]}"
+        )
     remember("user", prompt)
     remember("assistant", answer)
     return answer
